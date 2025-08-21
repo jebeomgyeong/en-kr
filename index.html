@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>KR-EN Practice</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+:root{
+  --bg:#f5f5f5;
+  --text:#1b1f2a;
+  --card:#ffffff;
+  --shadow:rgba(0,0,0,0.12);
+  --border:#d9dce3;
+  --btn:#eceff5;
+  --btn-text:#1b1f2a;
+  --accent:#165ef0;
+  --ok:#12a150;
+  --bad:#d22f27;
+  --diff-miss:#ffe2e2;
+}
+:root.dark{
+  --bg:#0b1020;
+  --text:#e6ecff;
+  --card:#121933;
+  --shadow:rgba(0,0,0,0.35);
+  --border:#2a3357;
+  --btn:#1a2450;
+  --btn-text:#e6ecff;
+  --accent:#6aa7ff;
+  --ok:#22c55e;
+  --bad:#ef4444;
+  --diff-miss:rgba(239,68,68,.22);
+}
+@media (prefers-color-scheme: dark){
+  :root:not(.light){
+    --bg:#0b1020;
+    --text:#e6ecff;
+    --card:#121933;
+    --shadow:rgba(0,0,0,0.35);
+    --border:#2a3357;
+    --btn:#1a2450;
+    --btn-text:#e6ecff;
+    --accent:#6aa7ff;
+    --ok:#22c55e;
+    --bad:#ef4444;
+    --diff-miss:rgba(239,68,68,.22);
+  }
+}
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Helvetica, Arial, sans-serif; margin: 20px; background: var(--bg); color: var(--text);}
+.card { background: var(--card); padding: 20px; border-radius: 12px; max-width: 880px; margin: auto; box-shadow: 0 8px 24px var(--shadow); border:1px solid var(--border); }
+h1 { font-size: 22px; }
+.toprow { display:flex; align-items:center; gap:12px; justify-content:space-between; flex-wrap:wrap; }
+.row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin: 10px 0;}
+select, input[type="file"] { background: var(--btn); color: var(--btn-text); border:1px solid var(--border); padding: 8px 10px; border-radius: 8px; }
+button { margin: 5px 5px 5px 0; padding: 8px 14px; font-size: 15px; background: var(--btn); color: var(--btn-text); border:1px solid var(--border); border-radius: 8px; cursor: pointer;}
+button:hover{filter:brightness(1.05)} button:disabled{opacity:.6; cursor:not-allowed}
+.kbd { background: #dde3ef; color:#0f172a; padding: 2px 4px; border-radius: 4px; }
+.toggle button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+#question { margin-top: 8px; margin-bottom: 12px; font-size: 18px; }
+#answerBox {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: 90px;
+  padding: 10px 12px;
+  font-size: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  resize: vertical;
+  background: transparent;
+  color: var(--text);
+}
+#feedback { margin-top: 10px; }
+.correct { color: var(--ok); }
+.incorrect { color: var(--bad); }
+.small { font-size: 13px; color:#6b7aa6; }
+hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+.pill { display:inline-block; background:#11204a22; color:var(--btn-text); border:1px solid var(--border); padding:4px 10px; border-radius: 999px; font-size:12px;}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="toprow">
+    <h1 style="margin:0;">KR-EN Practice</h1>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button id="themeBtn" title="Toggle Dark Mode" style="margin:0">🌙 Dark</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label for="setSelect">세트 선택:</label>
+    <select id="setSelect"></select>
+    <span id="progress" class="pill">0/0</span>
+  </div>
+
+  <div class="row">
+    <div class="toggle">
+      <button id="seqBtn" class="active">순차 연습</button>
+      <button id="randBtn">랜덤 연습</button>
+    </div>
+    <span class="small">모드를 바꾸면 현재 세트가 <b>처음부터</b> 새 순서로 시작합니다.</span>
+  </div>
+
+  <div class="row" style="align-items:flex-start;">
+    <div>
+      <input type="file" id="jsonFile" accept=".json">
+      <button id="loadJsonBtn">JSON 세트 불러오기</button>
+    </div>
+    <div class="small">형식: 
+<code>{ [ { "title": "세트 제목", "body": [ {"english":"...", "korean":"..."}, ... ] } ] }</code><br>
+(루트 배열, 또는 <code>{"sets":[...]}</code> 형식도 지원)</div>
+  </div>
+
+  <hr/>
+
+  <div id="question">여기에 한국어 문장이 표시됩니다.</div>
+  <textarea id="answerBox" placeholder="영어로 입력하세요"></textarea><br>
+  <button id="checkBtn">Check</button>
+  <button id="nextBtn" disabled>Next</button>
+  <button id="showBtn">Show Answer</button>
+  <div id="feedback"></div>
+
+  <div style="margin-top:10px; font-size:14px;">
+    단축키: <span class="kbd">Enter</span> = Check, <span class="kbd">Ctrl</span>/<span class="kbd">⌘</span>+<span class="kbd">Enter</span> = Next
+  </div>
+
+  <hr/>
+
+  <div class="small">
+    옵션:
+    <label><input type="checkbox" id="ignoreContractions" checked> 축약형 차이 무시</label>
+    <label><input type="checkbox" id="ignorePunct" checked> 문장부호 무시</label>
+    <label><input type="checkbox" id="ignoreCase" checked> 대소문자 무시</label>
+    <label><input type="checkbox" id="ignoreSpaces" checked> 공백 단순화</label>
+  </div>
+</div>
+
+<script>
+// ---------- Built-in sets (removed) ----------
+const builtinSets = [ /* removed */ 
+  {
+    key: "A",
+    title: "세트 A (Minnesota & Family)",
+    items: [
+      ["저는 제 자신에 대해 조금 말씀드리고자 합니다.","Let me tell you a little about myself."],
+      ["저는 미네소타에서 태어나고 자랐으며, 세인트폴 시 출신입니다.","I was born and raised in Minnesota and I’m a native of the city of Saint Paul."],
+      ["저는 부모님과 여덟 형제, 두 자매와 함께 그곳에서 자랐습니다.","I grew up there with my parents and my eight brothers and two sisters."],
+      ["저는 열한 번째 아이이므로, 가족의 막내라고 할 수 있습니다. 하지만 저는 응석받이는 아니었다고 맹세합니다.","I’m the eleventh child, so you could say I’m the baby of the family, but I swear I wasn’t spoiled."],
+      ["맞습니다, 저는 대가족의 일원이에요. 아마도 동네에서 가장 큰 가족일 거고, 어쩌면 주에서 가장 큰 가족일지도 몰라요!","That’s right, I’m part of a big family, probably the biggest family in the neighborhood, perhaps the biggest family in the state!"]
+    ]
+  },
+  {
+    key: "B",
+    title: "세트 B (Mornings & Alarms)",
+    items: [
+      ["제 하루에서 가장 힘든 순간은 분명히 일어나야 할 때입니다.","The worst part of the day for me is definitely when I have to get up."],
+      ["잠에서 깨는 건 괜찮습니다. 그건 감당할 수 있어요.","Waking up, that I can handle."],
+      ["하지만 일어나는 건요? 그건 정말 싫습니다.","But getting up? That, I hate."],
+      ["제가 사용하는 이불은 무겁습니다. 주로 이불과 얇은 담요를 함께 덮기 때문이죠.","The covers I have on my bed are heavy, mostly because I have a comforter as well as a light blanket."],
+      ["저는 베개 두 개를 베고 자는데, 이유는 모르겠지만 베개 커버 색깔이 서로 다릅니다.","I sleep with two pillows, which for some reason have different color pillowcases."],
+      ["뭐, 적어도 시트는 색이 맞습니다.","Well, at least the sheets match."]
+    ]
+  }
+];
+
+// Imported sets container
+let importedSets = []; // array of {key, title, items} (load via JSON)
+
+// ---------- Theme handling ----------
+(function(){
+  const root = document.documentElement;
+  const saved = localStorage.getItem('theme');
+  if(saved === 'dark'){ root.classList.add('dark'); root.classList.remove('light'); }
+  else if(saved === 'light'){ root.classList.add('light'); root.classList.remove('dark'); }
+  const btn = document.getElementById('themeBtn');
+  function updateBtn(){
+    const isDark = root.classList.contains('dark') || (!root.classList.contains('light') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    btn.textContent = isDark ? '☀️ Light' : '🌙 Dark';
+    btn.title = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+  }
+  btn.addEventListener('click', ()=>{
+    const isDark = root.classList.contains('dark');
+    if(isDark){
+      root.classList.remove('dark'); root.classList.add('light'); localStorage.setItem('theme','light');
+    } else {
+      root.classList.add('dark'); root.classList.remove('light'); localStorage.setItem('theme','dark');
+    }
+    updateBtn();
+  });
+  updateBtn();
+})();
+
+// ---------- App State ----------
+let mode = 'seq'; // 'seq' | 'rand'
+let order = [];
+let idx = 0; // position
+let currentItems = []; // [ [ko,en], ... ]
+
+const els = {
+  setSelect: document.getElementById('setSelect'),
+  progress: document.getElementById('progress'),
+  question: document.getElementById('question'),
+  answerBox: document.getElementById('answerBox'),
+  checkBtn: document.getElementById('checkBtn'),
+  nextBtn: document.getElementById('nextBtn'),
+  showBtn: document.getElementById('showBtn'),
+  feedback: document.getElementById('feedback'),
+  seqBtn: document.getElementById('seqBtn'),
+  randBtn: document.getElementById('randBtn'),
+  jsonFile: document.getElementById('jsonFile'),
+  loadJsonBtn: document.getElementById('loadJsonBtn'),
+  ignoreContractions: document.getElementById('ignoreContractions'),
+  ignorePunct: document.getElementById('ignorePunct'),
+  ignoreCase: document.getElementById('ignoreCase'),
+  ignoreSpaces: document.getElementById('ignoreSpaces')
+};
+
+function shuffle(arr){
+  let a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function rebuildSetSelect(){
+  els.setSelect.innerHTML = "";
+
+  const og2 = document.createElement('optgroup');
+  og2.label = "가져온 세트";
+  if(importedSets.length === 0){
+    const opt = document.createElement('option');
+    opt.disabled = true;
+    opt.textContent = "(JSON을 불러오세요)";
+    og2.appendChild(opt);
+  } else {
+    importedSets.forEach(s=>{
+      const opt = document.createElement('option');
+      opt.value = "imported:" + s.key;
+      opt.textContent = s.title;
+      og2.appendChild(opt);
+    });
+  }
+  els.setSelect.appendChild(og2);
+
+  els.setSelect.selectedIndex = 0;
+}
+
+function pickSetByValue(value){
+  if(value.startsWith("builtin:")){
+    const key = value.split(":")[1];
+    const found = builtinSets.find(s=>s.key===key);
+    return found ? found.items : [];
+  } else if(value.startsWith("imported:")){
+    const key = value.split(":")[1];
+    const found = importedSets.find(s=>s.key===key);
+    return found ? found.items : [];
+  }
+  return [];
+}
+
+function buildOrder(){
+  order = Array.from({length: currentItems.length}, (_,i)=>i);
+  if(mode==='rand') order = shuffle(order);
+  idx = 0;
+}
+
+function updateProgress(){
+  const total = currentItems.length;
+  els.progress.textContent = total ? `${Math.min(idx+1,total)}/${total}` : `0/0`;
+}
+
+function loadItem(){
+  if(currentItems.length === 0){
+    els.question.textContent = "세트에 문장이 없습니다.";
+    els.answerBox.value = "";
+    els.answerBox.disabled = true;
+    els.checkBtn.disabled = true;
+    els.nextBtn.disabled = true;
+    updateProgress();
+    return;
+  }
+  const [ko,] = currentItems[order[idx]];
+  els.question.textContent = ko;
+  els.answerBox.value = "";
+  els.answerBox.disabled = false;
+  els.checkBtn.disabled = false;
+  els.nextBtn.disabled = true;
+  els.feedback.innerHTML = "";
+  updateProgress();
+  els.answerBox.focus();
+}
+
+function onSetChange(){
+  const value = els.setSelect.value || "";
+  if(!value.startsWith("imported:")){
+    // no sets yet
+    currentItems = [];
+    buildOrder();
+    loadItem();
+    return;
+  }
+  currentItems = pickSetByValue(value);
+  buildOrder();
+  loadItem();
+}
+
+function normalize(str){
+  let s = str;
+  if(els.ignoreContractions.checked){
+    // normalize common contractions both directions by simplifying punctuation/case later
+    s = s.replace(/\b(can not)\b/gi,"can't")
+         .replace(/\b(are not)\b/gi,"aren't")
+         .replace(/\b(will not)\b/gi,"won't")
+         .replace(/\b(I am)\b/gi,"I'm")
+         .replace(/\b(you are)\b/gi,"you're")
+         .replace(/\b(we are)\b/gi,"we're")
+         .replace(/\b(they are)\b/gi,"they're")
+         .replace(/\b(it is)\b/gi,"it's");
+    s = s.replace(/[’‘]/g,"'");
+  }
+  if(els.ignorePunct.checked){ s = s.replace(/[.,!?;:(){}\[\]—–\-]/g," "); }
+  if(els.ignoreCase.checked){ s = s.toLowerCase(); }
+  if(els.ignoreSpaces.checked){ s = s.replace(/\s+/g," ").trim(); }
+  return s;
+}
+
+function check(){
+  const [,en] = currentItems[order[idx]];
+  const user = els.answerBox.value.trim();
+  if(!user){
+    els.feedback.innerHTML = `<div class="incorrect">입력이 비어 있어요.</div>`;
+    return;
+  }
+  const ok = normalize(user) === normalize(en);
+  if(ok){
+    els.feedback.innerHTML = `<div class="correct">✔ Correct!</div>`;
+  }else{
+    els.feedback.innerHTML = `<div class="incorrect">✘ Incorrect.<br>Your: ${user}<br>Answer: ${en}</div>`;
+  }
+  els.nextBtn.disabled = false;
+}
+
+function next(){
+  if(idx < currentItems.length-1){
+    idx++;
+    loadItem();
+  } else {
+    els.feedback.innerHTML = `<div class="correct">완료! 수고하셨어요 🎉</div>`;
+    idx = 0;
+    buildOrder();
+    loadItem();
+  }
+}
+
+function showAnswer(){
+  const [,en] = currentItems[order[idx]];
+  els.feedback.innerHTML = `<div>Answer: ${en}</div>`;
+  els.nextBtn.disabled = false;
+}
+
+// JSON loader
+function coerceSets(schema){
+  // Accept formats:
+  // 1) { sets: [ {title, body:[{english,korean},...]}, ... ] }
+  // 2) [ {title, body:[...]}, ... ]
+  // 3) { <anyKey>: [ {title, body:[...]} ] } -> use first array value
+  let arr = null;
+  if(Array.isArray(schema)){
+    arr = schema;
+  } else if (schema && typeof schema === 'object'){
+    if(Array.isArray(schema.sets)) arr = schema.sets;
+    else {
+      // find first array value
+      for(const k of Object.keys(schema)){
+        if(Array.isArray(schema[k])){ arr = schema[k]; break; }
+      }
+    }
+  }
+  if(!Array.isArray(arr)) throw new Error("유효한 세트 배열을 찾을 수 없습니다.");
+  const out = [];
+  arr.forEach((s, i)=>{
+    const title = s.title || `Imported Set ${i+1}`;
+    const body = Array.isArray(s.body) ? s.body : [];
+    const items = body.map((it, j)=>{
+      const en = it.english ?? it.English ?? it.EN ?? "";
+      const ko = it.korean ?? it.Korean ?? it.KO ?? "";
+      if(!en || !ko) throw new Error(`문장 ${j+1}에 english/korean 누락`);
+      return [ko, en];
+    });
+    out.push({ title, items });
+  });
+  return out;
+}
+
+function loadJsonFile(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onerror = ()=> reject(new Error("파일을 읽는 중 오류가 발생했습니다."));
+    reader.onload = ()=>{
+      try{
+        const text = reader.result;
+        const data = JSON.parse(text);
+        const sets = coerceSets(data);
+        resolve(sets);
+      }catch(e){
+        reject(e);
+      }
+    };
+    reader.readAsText(file, "utf-8");
+  });
+}
+
+els.loadJsonBtn.addEventListener('click', async ()=>{
+  const file = els.jsonFile.files && els.jsonFile.files[0];
+  if(!file){ alert("JSON 파일을 선택해주세요."); return; }
+  try{
+    const imported = await loadJsonFile(file);
+    // Add to importedSets with unique keys
+    imported.forEach((s, i)=>{
+      const key = `J${Date.now()}_${i}`;
+      importedSets.push({ key, title: s.title, items: s.items });
+    });
+    rebuildSetSelect();
+    // auto-select first imported set
+    const lastGroupIndex = els.setSelect.options.length - 1;
+    els.setSelect.selectedIndex = els.setSelect.options.length - 1; // last option overall
+    onSetChange();
+  }catch(err){
+    alert("불러오기 실패: " + err.message);
+  }
+});
+
+// Event wiring
+els.seqBtn.onclick = ()=>{ mode='seq'; els.seqBtn.classList.add('active'); els.randBtn.classList.remove('active'); buildOrder(); loadItem(); };
+els.randBtn.onclick = ()=>{ mode='rand'; els.randBtn.classList.add('active'); els.seqBtn.classList.remove('active'); buildOrder(); loadItem(); };
+els.setSelect.onchange = onSetChange;
+els.checkBtn.onclick = check;
+els.nextBtn.onclick = next;
+els.showBtn.onclick = showAnswer;
+
+els.answerBox.addEventListener("keydown", (e)=>{
+  if(e.key==="Enter" && (e.ctrlKey||e.metaKey)){
+    e.preventDefault();
+    if(!els.nextBtn.disabled){ next(); } else { check(); }
+    return;
+  }
+  if(e.key==="Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey){
+    e.preventDefault();
+    check();
+  }
+});
+
+// Init
+rebuildSetSelect();
+// Wait for JSON import before loading set
+currentItems = []; buildOrder(); loadItem();
+</script>
+</body>
+</html>
