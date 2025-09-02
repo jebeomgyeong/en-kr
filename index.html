@@ -107,7 +107,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
       <button id="loadJsonBtn">JSON 세트 불러오기</button>
     </div>
     <div class="small">형식: 
-<code>{ [ { "title": "세트 제목", "body": [ {"english":"...", "korean":"..."}, ... ] } ] }</code><br>
+<code>{ "sets": [ { "title": "...", "body": [ {"english":"...", "korean":"..."}, ... ] } ] }</code><br>
 (루트 배열, 또는 <code>{"sets":[...]}</code> 형식도 지원)</div>
   </div>
 
@@ -117,11 +117,12 @@ hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
   <textarea id="answerBox" placeholder="영어로 입력하세요"></textarea><br>
   <button id="checkBtn">Check</button>
   <button id="nextBtn" disabled>Next</button>
+  <button id="skipBtn" title="입력 없이 다음으로 넘어가기 (Option+N)">Skip</button>
   <button id="showBtn">Show Answer</button>
   <div id="feedback"></div>
 
   <div style="margin-top:10px; font-size:14px;">
-    단축키: <span class="kbd">Enter</span> = Check, <span class="kbd">Ctrl</span>/<span class="kbd">⌘</span>+<span class="kbd">Enter</span> = Next
+    단축키: <span class="kbd">Enter</span> = Check, <span class="kbd">Ctrl</span>/<span class="kbd">⌘</span>+<span class="kbd">Enter</span> = Next, <span class="kbd">⌥</span>+<span class="kbd">N</span> = Skip
   </div>
 
   <hr/>
@@ -137,33 +138,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
 
 <script>
 // ---------- Built-in sets (removed) ----------
-const builtinSets = [ /* removed */ 
-  {
-    key: "A",
-    title: "세트 A (Minnesota & Family)",
-    items: [
-      ["저는 제 자신에 대해 조금 말씀드리고자 합니다.","Let me tell you a little about myself."],
-      ["저는 미네소타에서 태어나고 자랐으며, 세인트폴 시 출신입니다.","I was born and raised in Minnesota and I’m a native of the city of Saint Paul."],
-      ["저는 부모님과 여덟 형제, 두 자매와 함께 그곳에서 자랐습니다.","I grew up there with my parents and my eight brothers and two sisters."],
-      ["저는 열한 번째 아이이므로, 가족의 막내라고 할 수 있습니다. 하지만 저는 응석받이는 아니었다고 맹세합니다.","I’m the eleventh child, so you could say I’m the baby of the family, but I swear I wasn’t spoiled."],
-      ["맞습니다, 저는 대가족의 일원이에요. 아마도 동네에서 가장 큰 가족일 거고, 어쩌면 주에서 가장 큰 가족일지도 몰라요!","That’s right, I’m part of a big family, probably the biggest family in the neighborhood, perhaps the biggest family in the state!"]
-    ]
-  },
-  {
-    key: "B",
-    title: "세트 B (Mornings & Alarms)",
-    items: [
-      ["제 하루에서 가장 힘든 순간은 분명히 일어나야 할 때입니다.","The worst part of the day for me is definitely when I have to get up."],
-      ["잠에서 깨는 건 괜찮습니다. 그건 감당할 수 있어요.","Waking up, that I can handle."],
-      ["하지만 일어나는 건요? 그건 정말 싫습니다.","But getting up? That, I hate."],
-      ["제가 사용하는 이불은 무겁습니다. 주로 이불과 얇은 담요를 함께 덮기 때문이죠.","The covers I have on my bed are heavy, mostly because I have a comforter as well as a light blanket."],
-      ["저는 베개 두 개를 베고 자는데, 이유는 모르겠지만 베개 커버 색깔이 서로 다릅니다.","I sleep with two pillows, which for some reason have different color pillowcases."],
-      ["뭐, 적어도 시트는 색이 맞습니다.","Well, at least the sheets match."]
-    ]
-  }
-];
-
-// Imported sets container
+const builtinSets = [ /* removed */ ];
 let importedSets = []; // array of {key, title, items} (load via JSON)
 
 // ---------- Theme handling ----------
@@ -203,6 +178,7 @@ const els = {
   answerBox: document.getElementById('answerBox'),
   checkBtn: document.getElementById('checkBtn'),
   nextBtn: document.getElementById('nextBtn'),
+  skipBtn: document.getElementById('skipBtn'),
   showBtn: document.getElementById('showBtn'),
   feedback: document.getElementById('feedback'),
   seqBtn: document.getElementById('seqBtn'),
@@ -226,7 +202,6 @@ function shuffle(arr){
 
 function rebuildSetSelect(){
   els.setSelect.innerHTML = "";
-
   const og2 = document.createElement('optgroup');
   og2.label = "가져온 세트";
   if(importedSets.length === 0){
@@ -243,16 +218,11 @@ function rebuildSetSelect(){
     });
   }
   els.setSelect.appendChild(og2);
-
   els.setSelect.selectedIndex = 0;
 }
 
 function pickSetByValue(value){
-  if(value.startsWith("builtin:")){
-    const key = value.split(":")[1];
-    const found = builtinSets.find(s=>s.key===key);
-    return found ? found.items : [];
-  } else if(value.startsWith("imported:")){
+  if(value && value.startsWith("imported:")){
     const key = value.split(":")[1];
     const found = importedSets.find(s=>s.key===key);
     return found ? found.items : [];
@@ -278,6 +248,7 @@ function loadItem(){
     els.answerBox.disabled = true;
     els.checkBtn.disabled = true;
     els.nextBtn.disabled = true;
+    els.feedback.innerHTML = "";
     updateProgress();
     return;
   }
@@ -295,7 +266,6 @@ function loadItem(){
 function onSetChange(){
   const value = els.setSelect.value || "";
   if(!value.startsWith("imported:")){
-    // no sets yet
     currentItems = [];
     buildOrder();
     loadItem();
@@ -309,7 +279,6 @@ function onSetChange(){
 function normalize(str){
   let s = str;
   if(els.ignoreContractions.checked){
-    // normalize common contractions both directions by simplifying punctuation/case later
     s = s.replace(/\b(can not)\b/gi,"can't")
          .replace(/\b(are not)\b/gi,"aren't")
          .replace(/\b(will not)\b/gi,"won't")
@@ -362,17 +331,12 @@ function showAnswer(){
 
 // JSON loader
 function coerceSets(schema){
-  // Accept formats:
-  // 1) { sets: [ {title, body:[{english,korean},...]}, ... ] }
-  // 2) [ {title, body:[...]}, ... ]
-  // 3) { <anyKey>: [ {title, body:[...]} ] } -> use first array value
   let arr = null;
   if(Array.isArray(schema)){
     arr = schema;
   } else if (schema && typeof schema === 'object'){
     if(Array.isArray(schema.sets)) arr = schema.sets;
     else {
-      // find first array value
       for(const k of Object.keys(schema)){
         if(Array.isArray(schema[k])){ arr = schema[k]; break; }
       }
@@ -412,20 +376,17 @@ function loadJsonFile(file){
   });
 }
 
-els.loadJsonBtn.addEventListener('click', async ()=>{
+document.getElementById('loadJsonBtn').addEventListener('click', async ()=>{
   const file = els.jsonFile.files && els.jsonFile.files[0];
   if(!file){ alert("JSON 파일을 선택해주세요."); return; }
   try{
     const imported = await loadJsonFile(file);
-    // Add to importedSets with unique keys
     imported.forEach((s, i)=>{
       const key = `J${Date.now()}_${i}`;
       importedSets.push({ key, title: s.title, items: s.items });
     });
     rebuildSetSelect();
-    // auto-select first imported set
-    const lastGroupIndex = els.setSelect.options.length - 1;
-    els.setSelect.selectedIndex = els.setSelect.options.length - 1; // last option overall
+    els.setSelect.selectedIndex = els.setSelect.options.length - 1;
     onSetChange();
   }catch(err){
     alert("불러오기 실패: " + err.message);
@@ -438,8 +399,10 @@ els.randBtn.onclick = ()=>{ mode='rand'; els.randBtn.classList.add('active'); el
 els.setSelect.onchange = onSetChange;
 els.checkBtn.onclick = check;
 els.nextBtn.onclick = next;
+els.skipBtn.onclick = ()=> next();
 els.showBtn.onclick = showAnswer;
 
+// Textarea shortcuts
 els.answerBox.addEventListener("keydown", (e)=>{
   if(e.key==="Enter" && (e.ctrlKey||e.metaKey)){
     e.preventDefault();
@@ -449,6 +412,14 @@ els.answerBox.addEventListener("keydown", (e)=>{
   if(e.key==="Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey){
     e.preventDefault();
     check();
+  }
+});
+
+// Global shortcut: Alt+N -> Skip (next without checking)
+document.addEventListener('keydown', (e)=>{
+  if(e.altKey && (e.key === 'n' || e.key === 'N')){
+    e.preventDefault();
+    next();
   }
 });
 
