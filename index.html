@@ -76,6 +76,9 @@ button:hover{filter:brightness(1.05)} button:disabled{opacity:.6; cursor:not-all
 .small { font-size: 13px; color:#6b7aa6; }
 hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
 .pill { display:inline-block; background:#11204a22; color:var(--btn-text); border:1px solid var(--border); padding:4px 10px; border-radius: 999px; font-size:12px;}
+.diff { font-family: monospace; background: var(--card); padding: 8px 12px; border-radius: 6px; margin: 6px 0; border: 1px solid var(--border); }
+.diff-added { background: #e8f5e8; color: #2d5a2d; padding: 2px 4px; border-radius: 3px; }
+.diff-removed { background: #ffeaea; color: #8b4444; padding: 2px 4px; border-radius: 3px; text-decoration: line-through; }
 </style>
 </head>
 <body>
@@ -119,10 +122,16 @@ hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
   <button id="nextBtn" disabled>Next</button>
   <button id="skipBtn" title="입력 없이 다음으로 넘어가기 (Option+N)">Skip</button>
   <button id="showBtn">Show Answer</button>
+  <button id="refreshBtn" title="현재 문장 새로고침">Refresh</button>
+  <button id="restartBtn" title="현재 세트를 처음부터 다시 시작">Restart</button>
   <div id="feedback"></div>
 
   <div style="margin-top:10px; font-size:14px;">
-    단축키: <span class="kbd">Enter</span> = Check, <span class="kbd">Ctrl</span>/<span class="kbd">⌘</span>+<span class="kbd">Enter</span> = Next, <span class="kbd">⌥</span>+<span class="kbd">N</span> = Skip
+    단축키:<br>
+    <span class="kbd">Enter</span> = Check<br>
+    <span class="kbd">Ctrl</span>/<span class="kbd">⌘</span>+<span class="kbd">Enter</span> = Next<br>
+    <span class="kbd">⌥</span>+<span class="kbd">N</span> = Skip<br>
+    <span class="kbd">⌘</span>+<span class="kbd">⇧</span>+<span class="kbd">R</span> = Restart
   </div>
 
   <hr/>
@@ -133,6 +142,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
     <label><input type="checkbox" id="ignorePunct" checked> 문장부호 무시</label>
     <label><input type="checkbox" id="ignoreCase" checked> 대소문자 무시</label>
     <label><input type="checkbox" id="ignoreSpaces" checked> 공백 단순화</label>
+    <label><input type="checkbox" id="repeatPractice"> 현재 문장 반복 연습</label>
   </div>
 </div>
 
@@ -180,6 +190,8 @@ const els = {
   nextBtn: document.getElementById('nextBtn'),
   skipBtn: document.getElementById('skipBtn'),
   showBtn: document.getElementById('showBtn'),
+  refreshBtn: document.getElementById('refreshBtn'),
+  restartBtn: document.getElementById('restartBtn'),
   feedback: document.getElementById('feedback'),
   seqBtn: document.getElementById('seqBtn'),
   randBtn: document.getElementById('randBtn'),
@@ -188,7 +200,8 @@ const els = {
   ignoreContractions: document.getElementById('ignoreContractions'),
   ignorePunct: document.getElementById('ignorePunct'),
   ignoreCase: document.getElementById('ignoreCase'),
-  ignoreSpaces: document.getElementById('ignoreSpaces')
+  ignoreSpaces: document.getElementById('ignoreSpaces'),
+  repeatPractice: document.getElementById('repeatPractice')
 };
 
 function shuffle(arr){
@@ -306,7 +319,8 @@ function check(){
   if(ok){
     els.feedback.innerHTML = `<div class="correct">✔ Correct!</div>`;
   }else{
-    els.feedback.innerHTML = `<div class="incorrect">✘ Incorrect.<br>Your: ${user}<br>Answer: ${en}</div>`;
+    const diff = createDiff(user, en);
+    els.feedback.innerHTML = `<div class="incorrect">✘ Incorrect.<br><span style="color: var(--text); font-weight: normal;">Answer: ${en}</span>${diff}</div>`;
   }
   els.nextBtn.disabled = false;
 }
@@ -327,6 +341,38 @@ function showAnswer(){
   const [,en] = currentItems[order[idx]];
   els.feedback.innerHTML = `<div>Answer: ${en}</div>`;
   els.nextBtn.disabled = false;
+}
+
+function restart(){
+  idx = 0;
+  buildOrder();
+  loadItem();
+}
+
+function refresh(){
+  loadItem();
+}
+
+function createDiff(userText, correctText) {
+  const userWords = userText.trim().split(/\s+/);
+  const correctWords = correctText.trim().split(/\s+/);
+  
+  const result = [];
+  const maxLength = Math.max(userWords.length, correctWords.length);
+  
+  for (let i = 0; i < maxLength; i++) {
+    const userWord = userWords[i] || '';
+    const correctWord = correctWords[i] || '';
+    
+    if (userWord === correctWord) {
+      if (userWord) result.push(userWord);
+    } else {
+      if (userWord) result.push(`<span class="diff-removed">${userWord}</span>`);
+      if (correctWord) result.push(`<span class="diff-added">${correctWord}</span>`);
+    }
+  }
+  
+  return `<div class="diff">${result.join(' ')}</div>`;
 }
 
 // JSON loader
@@ -401,12 +447,18 @@ els.checkBtn.onclick = check;
 els.nextBtn.onclick = next;
 els.skipBtn.onclick = ()=> next();
 els.showBtn.onclick = showAnswer;
+els.refreshBtn.onclick = refresh;
+els.restartBtn.onclick = restart;
 
 // Textarea shortcuts
 els.answerBox.addEventListener("keydown", (e)=>{
   if(e.key==="Enter" && (e.ctrlKey||e.metaKey)){
     e.preventDefault();
-    if(!els.nextBtn.disabled){ next(); } else { check(); }
+    if(!els.nextBtn.disabled){ 
+      if(els.repeatPractice.checked){ refresh(); } else { next(); }
+    } else { 
+      check(); 
+    }
     return;
   }
   if(e.key==="Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey){
@@ -415,11 +467,15 @@ els.answerBox.addEventListener("keydown", (e)=>{
   }
 });
 
-// Global shortcut: Alt+N -> Skip (next without checking)
+// Global shortcuts: Alt+N -> Skip, Cmd+Shift+R -> Restart
 document.addEventListener('keydown', (e)=>{
   if(e.altKey && (e.key === 'n' || e.key === 'N')){
     e.preventDefault();
     next();
+  }
+  if((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'r' || e.key === 'R')){
+    e.preventDefault();
+    restart();
   }
 });
 
