@@ -108,10 +108,14 @@ hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
     <div>
       <input type="file" id="jsonFile" accept=".json">
       <button id="loadJsonBtn">JSON 세트 불러오기</button>
+      <br><br>
+      <input type="file" id="jsonDir" webkitdirectory multiple accept=".json">
+      <button id="loadDirBtn">디렉토리의 모든 JSON 불러오기</button>
     </div>
-    <div class="small">형식: 
+    <div class="small">형식:
 <code>{ "sets": [ { "title": "...", "body": [ {"english":"...", "korean":"..."}, ... ] } ] }</code><br>
-(루트 배열, 또는 <code>{"sets":[...]}</code> 형식도 지원)</div>
+(루트 배열, 또는 <code>{"sets":[...]}</code> 형식도 지원)<br>
+디렉토리 선택 시 모든 .json 파일을 자동으로 불러옵니다.</div>
   </div>
 
   <hr/>
@@ -121,9 +125,9 @@ hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
   <button id="checkBtn">Check</button>
   <button id="nextBtn" disabled>Next</button>
   <button id="skipBtn" title="입력 없이 다음으로 넘어가기 (Option+N)">Skip</button>
-  <button id="showBtn">Show Answer</button>
   <button id="refreshBtn" title="현재 문장 새로고침">Refresh</button>
   <button id="restartBtn" title="현재 세트를 처음부터 다시 시작">Restart</button>
+  <button id="showBtn">Show Answer</button>
   <div id="feedback"></div>
 
   <div style="margin-top:10px; font-size:14px;">
@@ -197,6 +201,8 @@ const els = {
   randBtn: document.getElementById('randBtn'),
   jsonFile: document.getElementById('jsonFile'),
   loadJsonBtn: document.getElementById('loadJsonBtn'),
+  jsonDir: document.getElementById('jsonDir'),
+  loadDirBtn: document.getElementById('loadDirBtn'),
   ignoreContractions: document.getElementById('ignoreContractions'),
   ignorePunct: document.getElementById('ignorePunct'),
   ignoreCase: document.getElementById('ignoreCase'),
@@ -437,6 +443,51 @@ document.getElementById('loadJsonBtn').addEventListener('click', async ()=>{
   }catch(err){
     alert("불러오기 실패: " + err.message);
   }
+});
+
+document.getElementById('loadDirBtn').addEventListener('click', async ()=>{
+  const files = els.jsonDir.files;
+  if(!files || files.length === 0){ alert("디렉토리를 선택해주세요."); return; }
+
+  const jsonFiles = Array.from(files).filter(file =>
+    file.name.toLowerCase().endsWith('.json')
+  );
+
+  if(jsonFiles.length === 0){
+    alert("선택한 디렉토리에 JSON 파일이 없습니다.");
+    return;
+  }
+
+  let successCount = 0;
+  let failCount = 0;
+  const failedFiles = [];
+
+  for(const file of jsonFiles){
+    try{
+      const imported = await loadJsonFile(file);
+      imported.forEach((s, i)=>{
+        const key = `J${Date.now()}_${Math.random().toString(36).substr(2,9)}`;
+        const title = `${file.name.replace('.json', '')} - ${s.title}`;
+        importedSets.push({ key, title, items: s.items });
+      });
+      successCount++;
+    }catch(err){
+      failCount++;
+      failedFiles.push(`${file.name}: ${err.message}`);
+    }
+  }
+
+  rebuildSetSelect();
+  if(successCount > 0){
+    els.setSelect.selectedIndex = els.setSelect.options.length - 1;
+    onSetChange();
+  }
+
+  let message = `${successCount}개 파일 성공적으로 불러옴`;
+  if(failCount > 0){
+    message += `\n${failCount}개 파일 실패:\n${failedFiles.join('\n')}`;
+  }
+  alert(message);
 });
 
 // Event wiring
